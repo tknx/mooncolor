@@ -1,8 +1,8 @@
 # The Parity Public License 7.0.0
 
-Contributor: $name
+Contributor: Tarun Nagpal
 
-Source Code: $address
+Source Code: https://github.com/tknx/mooncolor
 
 ## Purpose
 

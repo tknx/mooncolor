@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Local config (never commit your real lat/long/bridge_ip if you'd
+# rather keep them private; the example file is the public template).
+config.yaml
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store

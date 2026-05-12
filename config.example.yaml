@@ -1,0 +1,152 @@
+# mooncolor config — copy to config.yaml and edit.
+#
+# Set the env var MOONCOLOR_CONFIG to point at this file, or place
+# config.yaml in mooncolor.py's working directory (the default).
+#
+# Secrets are NOT in this file. Set them via env:
+#   HUE_API_KEY        required, 40-char hex (see README.md)
+#   PURPLEAIR_API_KEY  optional, only if atmospheric.purpleair_url is set
+
+
+# HTTP server. 0.0.0.0 listens on all interfaces; restrict to a LAN
+# interface if you don't want external access. The port is whatever
+# your trigger source (home-automation system, cron, button) can hit.
+listen:
+  host: 0.0.0.0
+  port: 8080
+
+
+# Your physical location. Used by astronomy-engine to compute the
+# moon's altitude + phase, and by the atmospheric pollers as the
+# query coordinates for Open-Meteo / PurpleAir / etc.
+#
+# Latitude is positive north of the equator, negative south.
+# Longitude is positive east of Greenwich, negative west.
+# Elevation is in meters above mean sea level. A coarse value (±100m)
+# is fine — it affects only the airmass calculation at low altitudes.
+location:
+  latitude: 0.0          # ← set to your latitude (decimal degrees)
+  longitude: 0.0         # ← set to your longitude (decimal degrees)
+  elevation_m: 0         # ← set to your elevation in meters
+
+
+# Path to the bulb-gamut profile JSON. Relative paths resolve against
+# the directory containing THIS config file. A reference profile for
+# the Philips Hue Color A19 (LCA003) is bundled in `bulbs/`. If you
+# have a different bulb, drop its gamut JSON alongside lca003.json
+# and point bulb_profile at it. The gamut vertices come from the
+# manufacturer's published color-gamut triangle (Philips publishes
+# these for every Hue model).
+bulb_profile: bulbs/lca003.json
+
+
+hue:
+  # Your Hue Bridge V2-compatible LAN IP. Pin via DHCP reservation so
+  # the address doesn't change on reboot. Discoverable at:
+  #   https://discovery.meethue.com/
+  bridge_ip: 192.168.1.10
+
+  # Name of the env var holding your bridge API key. The default
+  # (HUE_API_KEY) matches the README's setup instructions.
+  api_key_env: HUE_API_KEY
+
+  # Numeric V1 light ID for the mooncolor bulb. Enumerate via:
+  #   curl http://<bridge_ip>/api/<api_key>/lights | jq
+  # …and look for the bulb you want by its name. Use the dict KEY
+  # (not the friendly name) here.
+  light_id: 1
+
+  http_timeout_s: 5.0
+
+
+tick:
+  # How often to recompute and push a new color frame. 300s (5 min)
+  # is plenty — moon motion is slow and atmospheric inputs only
+  # change on minute-scale timescales upstream.
+  period_s: 300
+
+  # Hue transitiontime in seconds — how long the bulb crossfades
+  # between successive frames. 30s gives smooth visual changes
+  # without making the lamp feel sluggish.
+  transition_s: 30
+
+  # Hue bri channel range is 1-254. The values below map phase
+  # fraction φ to brightness as a linear ramp:
+  #   bri = min_brightness + φ · (max_brightness − min_brightness)
+  # Full moon (φ≈1) → max_brightness. New moon (φ≈0) → min_brightness.
+  # Tune for your space: a bedside lamp at ~200 max is comfortable;
+  # a hallway accent might be higher.
+  max_brightness: 200
+  min_brightness: 3
+
+
+# Atmospheric inputs. All sources are polled in the background on
+# their own cadence. If a source goes stale (no fresh reading within
+# max_age_s), the corresponding default below is used until the source
+# recovers. The lamp keeps running with conservative-ish atmospheric
+# conditions rather than dropping to a degenerate color.
+atmospheric:
+  # Defaults used when the corresponding live source is unavailable.
+  # These values approximate a clean / clear night at a temperate
+  # mid-latitude site. Adjust for your typical local conditions.
+  aod_default: 0.10              # aerosol optical depth @ 550 nm
+  pm25_default: 8.0              # PM2.5 in µg/m³ (Open-Meteo / EPA scale)
+  pm10_default: 12.0             # PM10 in µg/m³
+  pressure_inhg_default: 30.0    # surface pressure, inches Hg
+  rh_default: 50.0               # relative humidity, percent (0-100)
+
+  # A reading is "fresh" if updated within this many seconds. CAMS /
+  # Open-Meteo air-quality has ~1-hour granularity upstream; PurpleAir
+  # is ~10 min. 3 hours of slack covers a full poll cycle of either,
+  # plus a couple of dropped scrapes, without falling back to defaults.
+  max_age_s: 10800
+
+  # Poll cadence per source, seconds. Open-Meteo updates hourly
+  # upstream, so polling every 30 min just costs an extra HTTP request
+  # per cycle. PurpleAir's free tier has a per-key rate limit — see
+  # https://api.purpleair.com/ for current quotas.
+  open_meteo_poll_s: 1800
+  purpleair_poll_s: 1800
+
+  # === Optional PurpleAir cross-check ===
+  #
+  # If you set purpleair_url AND provide PURPLEAIR_API_KEY in the
+  # environment, mooncolor will additionally fetch live PM2.5 readings
+  # from PurpleAir's bounding-box API, mean them, derive an AOD
+  # estimate, and override the CAMS-derived AOD when the local value
+  # exceeds it by purpleair_trigger_ratio. This catches local smoke
+  # events that CAMS hasn't ingested yet (wildfires upwind, controlled
+  # burns, etc.). Disable by setting purpleair_url to ~ (null) or
+  # removing it.
+  #
+  # Construct the URL by editing the bounding-box coordinates
+  # (nwlat / nwlng / selat / selng) to a ~5-10 km square around your
+  # location. Example below is a 5 km box around lat 0, lng 0;
+  # replace with your own. The fields= and max_age= query params
+  # should not need to change.
+  purpleair_url: ~
+  # purpleair_url: "https://api.purpleair.com/v1/sensors?fields=pm2.5_atm&location_type=0&max_age=1800&nwlat=0.04&nwlng=-0.04&selat=-0.04&selng=0.04"
+  purpleair_api_key_env: PURPLEAIR_API_KEY
+
+  # Barkjohn 2021 / EPA correction on raw PurpleAir PM2.5. Recommended
+  # ON — raw PurpleAir tends to over-read in humid air. Leave true
+  # unless you have a specific reason to bypass.
+  purpleair_use_epa_correction: true
+
+  # PM2.5 → AOD conversion factor. Default is a mass-extinction
+  # coefficient × boundary-layer-height product tuned to roughly match
+  # CAMS at clear-sky conditions in temperate coastal climates. Tune
+  # upward in dustier / drier climates; downward in maritime ones.
+  purpleair_pm25_to_aod_k: 0.003
+
+  # Only override CAMS with PurpleAir when local AOD exceeds CAMS by
+  # this factor. 1.5 means: PurpleAir must say AOD is at least 50%
+  # higher than CAMS to take over. Avoids flapping between sources
+  # when they're close. Raise toward 2.0 if you see spurious overrides
+  # in clean conditions; lower toward 1.2 if smoke events take too
+  # long to register.
+  purpleair_trigger_ratio: 1.5
+
+
+# stdlib logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
+log_level: INFO

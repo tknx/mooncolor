@@ -1,0 +1,19 @@
+{
+  "name": "Philips Hue Color A19 — LCA003 (Gamut C)",
+  "model": "LCA003",
+  "vendor": "Philips Signify",
+  "form_factor": "A19",
+  "gamut_class": "C",
+
+  "gamut_vertices": {
+    "R": [0.6915, 0.3083],
+    "G": [0.1700, 0.7000],
+    "B": [0.1532, 0.0475]
+  },
+
+  "notes": [
+    "Gamut C is Philips' published color triangle for newer Hue Color lamps (LCA001+, LCT016+). Vertices match the diyHue / OpenHAB / johnnap-Hue-API community references.",
+    "If the moonlight chromaticity falls outside this triangle, the script projects it onto the nearest gamut edge before sending to the lamp — preventing ad-hoc clipping by Hue's own logic.",
+    "To add a profile for a different lamp: copy this file, change model + gamut_vertices to your lamp's published gamut. The script does not need primary SPDs because it computes moonlight chromaticity directly from CIE observer integration; gamut vertices are only used for clamping."
+  ]
+}
